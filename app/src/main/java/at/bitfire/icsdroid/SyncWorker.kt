@@ -18,6 +18,7 @@ import at.bitfire.icsdroid.db.CalendarCredentials
 import at.bitfire.icsdroid.db.entity.Credential
 import at.bitfire.icsdroid.db.entity.Subscription
 import at.bitfire.icsdroid.ui.NotificationUtils
+import java.util.concurrent.TimeUnit
 
 class SyncWorker(
     context: Context,
@@ -58,6 +59,8 @@ class SyncWorker(
          */
         fun run(context: Context, force: Boolean = false, forceResync: Boolean = false, onlyMigrate: Boolean = false) {
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
+                // Add an initial delay of 20 seconds to allow the network connection to boot up
+                .setInitialDelay(20, TimeUnit.SECONDS)
                 .setInputData(
                     workDataOf(
                         FORCE_RESYNC to forceResync,
