@@ -42,6 +42,12 @@ class SyncWorker(
         const val ONLY_MIGRATE = "onlyMigration"
 
         /**
+         * The maximum number of attempts to make until considering the server as "unreachable".
+         * @since 20221212
+         */
+        const val MAX_ATTEMPTS = 5
+
+        /**
          * Enqueues a sync job for immediate execution. If the sync is forced,
          * the "requires network connection" constraint won't be set.
          *
@@ -103,7 +109,10 @@ class SyncWorker(
                 LocalCalendar.getCalendarProvider(applicationContext)
             } catch (e: SecurityException) {
                 NotificationUtils.showCalendarPermissionNotification(applicationContext)
-                return Result.failure()
+                return if (runAttemptCount >= MAX_ATTEMPTS)
+                    Result.failure()
+                else
+                    Result.retry()
             }
 
         try {
