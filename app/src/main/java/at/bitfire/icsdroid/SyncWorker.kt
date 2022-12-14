@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(
     context: Context,
     workerParams: WorkerParameters
-): CoroutineWorker(context, workerParams) {
+) : CoroutineWorker(context, workerParams) {
 
     companion object {
 
@@ -81,17 +81,19 @@ class SyncWorker(
                 ExistingWorkPolicy.REPLACE
             } else {
                 // regular sync, requires network
-                request.setConstraints(Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build())
+                request.setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
 
                 // don't overwrite previous syncs (whether regular or manual)
                 ExistingWorkPolicy.KEEP
             }
 
             WorkManager.getInstance(context)
-                    .beginUniqueWork(NAME, policy, request.build())
-                    .enqueue()
+                .beginUniqueWork(NAME, policy, request.build())
+                .enqueue()
         }
 
         fun liveStatus(context: Context) =
