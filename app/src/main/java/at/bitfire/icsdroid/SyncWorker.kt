@@ -131,6 +131,8 @@ class SyncWorker(
                     Result.retry()
             }
 
+        var result: Result = Result.success()
+
         try {
             // migrate old calendar-based subscriptions to database
             migrateLegacyCalendars()
@@ -147,19 +149,29 @@ class SyncWorker(
 
             // sync local calendars
             for (subscription in subscriptionsDao.getAll()) {
-                // Make sure the subscription has a matching calendar
-                subscription.calendarId ?: continue
-                val calendar = LocalCalendar.findById(account, provider, subscription.calendarId)
-                ProcessEventsTask(applicationContext, subscription, calendar, forceReSync).sync()
+                try {
+                    // Make sure the subscription has a matching calendar
+                    subscription.calendarId ?: continue
+                    val calendar = LocalCalendar.findById(account, provider, subscription.calendarId)
+                    ProcessEventsTask(applicationContext, subscription, calendar, forceReSync).sync()
+                } catch (e: Exception) {
+                    // If an error occurs while synchronizing this subscription, retry until
+                    // MAX_ATTEMPTS is reached
+                    // FIXME: Should break the whole synchronization when an error is thrown, or use this method that allows running the rest of subscriptions?
+                    result = if (runAttemptCount >= MAX_ATTEMPTS)
+                        Result.failure()
+                    else
+                        Result.retry()
+                }
             }
         } catch (e: InterruptedException) {
             Log.e(TAG, "Thread interrupted", e)
-            return Result.retry()
+            return Result.failure()
         } finally {
             provider.closeCompat()
         }
 
-        return Result.success()
+        return result
     }
 
     /**
