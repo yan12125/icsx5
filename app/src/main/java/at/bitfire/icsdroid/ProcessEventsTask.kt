@@ -200,6 +200,8 @@ class ProcessEventsTask(
             notificationManager.notify(subscription.id.toString(), 0, notification.build())
 
             subscriptionsDao.updateStatusError(subscription.id, message)
+
+            throw ex
         }
     }
 
