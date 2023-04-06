@@ -4,19 +4,15 @@
 
 package at.bitfire.icsdroid
 
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import at.bitfire.ical4android.Event
 import at.bitfire.ical4android.util.DateUtils
 import at.bitfire.icsdroid.calendar.LocalCalendar
 import at.bitfire.icsdroid.calendar.LocalEvent
 import at.bitfire.icsdroid.db.AppDatabase
 import at.bitfire.icsdroid.db.entity.Subscription
-import at.bitfire.icsdroid.ui.EditCalendarActivity
 import at.bitfire.icsdroid.ui.NotificationUtils
 import net.fortuna.ical4j.model.Property
 import net.fortuna.ical4j.model.PropertyList
@@ -109,9 +105,6 @@ class ProcessEventsTask(
         val uri = subscription.url
         Log.i(Constants.TAG, "Synchronizing $uri, forceResync=$forceResync")
 
-        // dismiss old notifications
-        val notificationManager = NotificationUtils.createChannels(context)
-        notificationManager.cancel(subscription.id.toString(), 0)
         var exception: Throwable? = null
 
         val downloader = object : CalendarFetcher(context, uri) {
@@ -172,32 +165,6 @@ class ProcessEventsTask(
 
         exception?.let { ex ->
             val message = ex.localizedMessage ?: ex.message ?: ex.toString()
-
-            val errorIntent = Intent(context, EditCalendarActivity::class.java)
-            errorIntent.putExtra(EditCalendarActivity.EXTRA_SUBSCRIPTION_ID, subscription.id)
-            errorIntent.putExtra(EditCalendarActivity.EXTRA_ERROR_MESSAGE, message)
-            errorIntent.putExtra(EditCalendarActivity.EXTRA_THROWABLE, ex)
-
-            val notification = NotificationCompat.Builder(context, NotificationUtils.CHANNEL_SYNC)
-                .setSmallIcon(R.drawable.ic_sync_problem_white)
-                .setCategory(NotificationCompat.CATEGORY_ERROR)
-                .setGroup(context.getString(R.string.app_name))
-                .setContentTitle(context.getString(R.string.sync_error_title))
-                .setContentText(message)
-                .setSubText(subscription.displayName)
-                .setContentIntent(
-                    PendingIntent.getActivity(
-                        context,
-                        0,
-                        errorIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT + NotificationUtils.flagImmutableCompat
-                    )
-                )
-                .setAutoCancel(true)
-                .setWhen(System.currentTimeMillis())
-                .setOnlyAlertOnce(true)
-            subscription.color?.let { notification.color = it }
-            notificationManager.notify(subscription.id.toString(), 0, notification.build())
 
             subscriptionsDao.updateStatusError(subscription.id, message)
 

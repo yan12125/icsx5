@@ -4,10 +4,13 @@
 
 package at.bitfire.icsdroid
 
+import android.app.PendingIntent
 import android.content.ContentProviderClient
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.work.*
 import at.bitfire.ical4android.AndroidCalendar
 import at.bitfire.ical4android.util.MiscUtils.ContentProviderClientHelper.closeCompat
@@ -17,6 +20,7 @@ import at.bitfire.icsdroid.db.AppDatabase
 import at.bitfire.icsdroid.db.CalendarCredentials
 import at.bitfire.icsdroid.db.entity.Credential
 import at.bitfire.icsdroid.db.entity.Subscription
+import at.bitfire.icsdroid.ui.EditCalendarActivity
 import at.bitfire.icsdroid.ui.NotificationUtils
 import java.util.concurrent.TimeUnit
 
@@ -153,10 +157,13 @@ class SyncWorker(
                     // If an error occurs while synchronizing this subscription, retry until
                     // MAX_ATTEMPTS is reached
                     // FIXME: Should break the whole synchronization when an error is thrown, or use this method that allows running the rest of subscriptions?
-                    result = if (runAttemptCount >= MAX_ATTEMPTS)
-                        Result.failure()
-                    else
-                        Result.retry()
+                    if (runAttemptCount >= MAX_ATTEMPTS) {
+                        notifySyncFailure(subscription, e)
+
+                        result = Result.failure()
+                    } else {
+                        result = Result.retry()
+                    }
                 }
         } catch (e: SecurityException) {
             NotificationUtils.showCalendarPermissionNotification(applicationContext)
@@ -253,6 +260,40 @@ class SyncWorker(
             Log.d(TAG, "Removing local calendar #${calendar.id} without subscription")
             calendar.delete()
         }
+    }
+
+    private fun notifySyncFailure(subscription: Subscription, ex: Exception) {
+        // dismiss old notifications
+        val notificationManager = NotificationUtils.createChannels(applicationContext)
+        notificationManager.cancel(subscription.id.toString(), 0)
+
+        val message = ex.localizedMessage ?: ex.message ?: ex.toString()
+
+        val errorIntent = Intent(applicationContext, EditCalendarActivity::class.java)
+        errorIntent.putExtra(EditCalendarActivity.EXTRA_SUBSCRIPTION_ID, subscription.id)
+        errorIntent.putExtra(EditCalendarActivity.EXTRA_ERROR_MESSAGE, message)
+        errorIntent.putExtra(EditCalendarActivity.EXTRA_THROWABLE, ex)
+
+        val notification = NotificationCompat.Builder(applicationContext, NotificationUtils.CHANNEL_SYNC)
+            .setSmallIcon(R.drawable.ic_sync_problem_white)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setGroup(applicationContext.getString(R.string.app_name))
+            .setContentTitle(applicationContext.getString(R.string.sync_error_title))
+            .setContentText(message)
+            .setSubText(subscription.displayName)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    applicationContext,
+                    0,
+                    errorIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT + NotificationUtils.flagImmutableCompat
+                )
+            )
+            .setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .setOnlyAlertOnce(true)
+        subscription.color?.let { notification.color = it }
+        notificationManager.notify(subscription.id.toString(), 0, notification.build())
     }
 
 }
